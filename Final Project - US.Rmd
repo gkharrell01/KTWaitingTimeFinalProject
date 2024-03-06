@@ -27,7 +27,7 @@ tx_data <- read_xlsx("~/Downloads/final_project_tx_data.xlsx")
 
 # Data Cleaning
 
-Checking for missing data shows that there is none! Ordinal data is yields to more obtuse interpretation, so we made the decision to transform ordinal ``age`` variable into a numerical variable by taking the midpoint of each interval. For similar reasons, ``Waiting_time_for_KT`` was analyzed as a categorical variable.
+Checking for missing data shows that there is none! Ordinal data when analysed leads to more obtuse interpretations, so we made the decision to transform ordinal ``age`` variable into a numerical variable by taking the midpoint of each interval. For similar reasons, ``Waiting_time_for_KT`` was analyzed as a categorical variable.
 
 ```{r}
 sum(is.na(tx_data))
