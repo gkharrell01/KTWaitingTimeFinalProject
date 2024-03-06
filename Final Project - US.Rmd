@@ -1,0 +1,312 @@
+---
+title: "Final Project Code - US"
+author: "Umar Siddiqi"
+date: '2024-02-08'
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Setup
+
+```{r}
+require(tidyverse)
+require(readxl)
+require(openxlsx)
+require(ggpubr)
+require(rstatix)
+require(flextable)
+require(survival)
+require(survminer)
+require(gtsummary)
+tx_data <- read_xlsx("~/Downloads/final_project_tx_data.xlsx")
+```
+
+
+# Data Cleaning
+
+Checking for missing data shows that there is none! Ordinal data is yields to more obtuse interpretation, so we made the decision to transform ordinal ``age`` variable into a numerical variable by taking the midpoint of each interval. For similar reasons, ``Waiting_time_for_KT`` was analyzed as a categorical variable.
+
+```{r}
+sum(is.na(tx_data))
+table(tx_data$age)
+tx_data$age <- case_when(tx_data$age == "11-20" ~ "15",
+                     tx_data$age == "21-30" ~ "25",
+                     tx_data$age == "31-40" ~ "35",
+                     tx_data$age == "41-50" ~ "45",
+                     tx_data$age == "51-60" ~ "55",
+                     tx_data$age == "61-70" ~ "65",
+                     tx_data$age == "71-80" ~ "75",
+                     T ~ NA_character_)
+tx_data$age <- as.numeric(tx_data$age)
+table(tx_data$age)
+```
+
+```{r}
+table(tx_data$sex)
+tx_data$sex <- case_when(tx_data$sex == 2 ~ "F",
+                         tx_data$sex == 1 ~ "M",
+                     T ~ NA_character_)
+table(tx_data$sex)
+str(tx_data$Waiting_time_for_KT)
+tx_data$Waiting_time_for_KT <- as.factor(tx_data$Waiting_time_for_KT)
+str(tx_data$Waiting_time_for_KT)
+```
+
+```{r}
+write.xlsx(tx_data, "~/Downloads/final_project_clean_data.xlsx")
+```
+
+# Univariate Cox Models
+
+Nota bene: for all the models, the ``sex`` variable uses the reference category of "F", so the HR produced is the HR associated with "M" or being a male.
+
+## All-cause Death
+```{r}
+# univariate to multiple predictors at once
+covariates <- c("sex",  "age", "Diabetes", "Hypertension", "Dyslipidemia", "History_of_AMI", "History_of_stroke")
+univ_formulas <- sapply(covariates,
+                        function(x) as.formula(paste('Surv(All_cause_time, All_cause_death)~', x)))
+
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = tx_data)})
+# Extract data 
+univ_results <- lapply(univ_models,
+                       function(x){ 
+                         x <- summary(x)
+                         p.value<-signif(x$wald["pvalue"], digits=2)
+                         wald.test<-signif(x$wald["test"], digits=2)
+                         beta<-signif(x$coef[1], digits=2);#coeficient beta
+                         HR <-signif(x$coef[2], digits=2);#exp(beta)
+                         HR.confint.lower <- signif(x$conf.int[,"lower .95"], 2)
+                         HR.confint.upper <- signif(x$conf.int[,"upper .95"],2)
+                         HR <- paste0(HR, " (", 
+                                      HR.confint.lower, "-", HR.confint.upper, ")")
+                         res<-c(beta, HR, wald.test, p.value)
+                         names(res)<-c("beta", "HR (95% CI for HR)", "wald.test", 
+                                       "p.value")
+                         return(res)
+                         #return(exp(cbind(coef(x),confint(x))))
+                       })
+res <- t(as.data.frame(univ_results, check.names = FALSE))
+as.data.frame(res)
+
+# Above code doesn't work on variable with multiple factors so we calculated the univarariate model for the KT waiting time variable separately
+coxph(Surv(All_cause_time, All_cause_death)~Waiting_time_for_KT, data=tx_data)%>%
+  finalfit::fit2df()
+```
+
+
+## Nonfatal AMI
+```{r}
+# univariate to multiple predictors at once
+covariates <- c("sex",  "age", "Diabetes", "Hypertension", "Dyslipidemia", "History_of_AMI", "History_of_stroke")
+univ_formulas <- sapply(covariates,
+                        function(x) as.formula(paste('Surv(Nonfatal_AMI_time, Nonfatal_AMI)~', x)))
+
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = tx_data)})
+# Extract data 
+univ_results <- lapply(univ_models,
+                       function(x){ 
+                         x <- summary(x)
+                         p.value<-signif(x$wald["pvalue"], digits=2)
+                         wald.test<-signif(x$wald["test"], digits=2)
+                         beta<-signif(x$coef[1], digits=2);#coeficient beta
+                         HR <-signif(x$coef[2], digits=2);#exp(beta)
+                         HR.confint.lower <- signif(x$conf.int[,"lower .95"], 2)
+                         HR.confint.upper <- signif(x$conf.int[,"upper .95"],2)
+                         HR <- paste0(HR, " (", 
+                                      HR.confint.lower, "-", HR.confint.upper, ")")
+                         res<-c(beta, HR, wald.test, p.value)
+                         names(res)<-c("beta", "HR (95% CI for HR)", "wald.test", 
+                                       "p.value")
+                         return(res)
+                         #return(exp(cbind(coef(x),confint(x))))
+                       })
+res <- t(as.data.frame(univ_results, check.names = FALSE))
+as.data.frame(res)
+
+# Above code doesn't work on variable with multiple factors so we calculated the univarariate model for the KT waiting time variable separately
+coxph(Surv(Nonfatal_AMI_time, Nonfatal_AMI)~Waiting_time_for_KT, data=tx_data)%>%
+  finalfit::fit2df()
+```
+
+## Nonfatal Stroke
+```{r}
+# univariate to multiple predictors at once
+covariates <- c("sex",  "age", "Diabetes", "Hypertension", "Dyslipidemia", "History_of_AMI", "History_of_stroke")
+univ_formulas <- sapply(covariates,
+                        function(x) as.formula(paste('Surv(Nonfatal_stroke_time, Nonfatal_stroke)~', x)))
+
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = tx_data)})
+# Extract data 
+univ_results <- lapply(univ_models,
+                       function(x){ 
+                         x <- summary(x)
+                         p.value<-signif(x$wald["pvalue"], digits=2)
+                         wald.test<-signif(x$wald["test"], digits=2)
+                         beta<-signif(x$coef[1], digits=2);#coeficient beta
+                         HR <-signif(x$coef[2], digits=2);#exp(beta)
+                         HR.confint.lower <- signif(x$conf.int[,"lower .95"], 2)
+                         HR.confint.upper <- signif(x$conf.int[,"upper .95"],2)
+                         HR <- paste0(HR, " (", 
+                                      HR.confint.lower, "-", HR.confint.upper, ")")
+                         res<-c(beta, HR, wald.test, p.value)
+                         names(res)<-c("beta", "HR (95% CI for HR)", "wald.test", 
+                                       "p.value")
+                         return(res)
+                         #return(exp(cbind(coef(x),confint(x))))
+                       })
+res <- t(as.data.frame(univ_results, check.names = FALSE))
+as.data.frame(res)
+
+# Above code doesn't work on variable with multiple factors so we calculated the univarariate model for the KT waiting time variable separately
+coxph(Surv(Nonfatal_stroke_time, Nonfatal_stroke)~Waiting_time_for_KT, data=tx_data)%>%
+  finalfit::fit2df()
+```
+
+## Primary endpoint (i.e., Freedom from All-cause Death, Nonfatal AMI, and Nonfatal Stroke)
+```{r}
+# univariate to multiple predictors at once
+covariates <- c("sex",  "age", "Diabetes", "Hypertension", "Dyslipidemia", "History_of_AMI", "History_of_stroke")
+univ_formulas <- sapply(covariates,
+                        function(x) as.formula(paste('Surv(Primary_events_time, Primary_events)~', x)))
+
+univ_models <- lapply( univ_formulas, function(x){coxph(x, data = tx_data)})
+# Extract data 
+univ_results <- lapply(univ_models,
+                       function(x){ 
+                         x <- summary(x)
+                         p.value<-signif(x$wald["pvalue"], digits=2)
+                         wald.test<-signif(x$wald["test"], digits=2)
+                         beta<-signif(x$coef[1], digits=2);#coeficient beta
+                         HR <-signif(x$coef[2], digits=2);#exp(beta)
+                         HR.confint.lower <- signif(x$conf.int[,"lower .95"], 2)
+                         HR.confint.upper <- signif(x$conf.int[,"upper .95"],2)
+                         HR <- paste0(HR, " (", 
+                                      HR.confint.lower, "-", HR.confint.upper, ")")
+                         res<-c(beta, HR, wald.test, p.value)
+                         names(res)<-c("beta", "HR (95% CI for HR)", "wald.test", 
+                                       "p.value")
+                         return(res)
+                         #return(exp(cbind(coef(x),confint(x))))
+                       })
+res <- t(as.data.frame(univ_results, check.names = FALSE))
+as.data.frame(res)
+
+# Above code doesn't work on variable with multiple factors so we calculated the univarariate model for the KT waiting time variable separately
+coxph(Surv(Primary_events_time, Primary_events)~Waiting_time_for_KT, data=tx_data)%>%
+  finalfit::fit2df()
+```
+
+
+# Multivariate Cox Models
+
+## Approach 1: Adjust for significant differences in baseline characteristics
+
+First, determine what significant differences exist:
+
+```{r}
+set_gtsummary_theme(theme_gtsummary_compact())
+tx_data %>% select(Waiting_time_for_KT, sex,  age, Diabetes, Hypertension, Dyslipidemia, History_of_AMI, History_of_stroke) %>%
+  tbl_summary(by = Waiting_time_for_KT, missing = "no",
+              type = c(age~"continuous"),
+              statistic = all_continuous() ~ "{median} ({min}, {max})") %>%
+  add_p() %>%
+  as_flex_table()
+```
+
+Recall: ``Waiting_time_for_KT``: the unit is year, 0=<1; 1=1-3; 2=4-6; 3=>6. So, patients who waited longer for KT were more likely to be female and younger. In terms of comorbodities, these patients were less likely to suffer from diabetes, hypertension, and dyslipidemia than those who were received KT earlier. We will adjust for the 5 significantly different covariates below.
+
+### All-cause Death
+```{r}
+coxph(Surv(All_cause_time, All_cause_death)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(All_cause_time, All_cause_death)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data), tx_data, main = "Approach 1: All-cause Death - Hazard Ratios")
+
+```
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on all-cause death.
+
+
+### Nonfatal AMI
+```{r}
+coxph(Surv(Nonfatal_AMI_time, Nonfatal_AMI)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Nonfatal_AMI_time, Nonfatal_AMI)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data), data=tx_data, main = "Approach 1: Nonfatal AMI - Hazard Ratios")
+```
+
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on nonfatal AMI.
+
+### Nonfatal Stroke
+```{r}
+coxph(Surv(Nonfatal_stroke_time, Nonfatal_stroke)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Nonfatal_stroke_time, Nonfatal_stroke)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data), data=tx_data, main = "Approach 1: Nonfatal Stroke - Hazard Ratios")
+```
+After adjusting for these variables, only a KT waiting time greater than 6 years still has a significant effect on nonfatal stroke.
+
+
+### Primary endpoint (i.e., Freedom from All-cause Death, Nonfatal AMI, and Nonfatal Stroke)
+```{r}
+coxph(Surv(Primary_events_time, Primary_events)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Primary_events_time, Primary_events)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia, data=tx_data), data=tx_data, main = "Approach 1: Primary Endpoint - Hazard Ratios")
+```
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on the primary endpoint.
+
+## Approach 2: Include all significant variables from the respective univariate analyses
+
+### All-cause Death
+
+All covariates except Diabetes were significant in univariate analysis.
+
+```{r}
+coxph(Surv(All_cause_time, All_cause_death)~Waiting_time_for_KT+sex+age+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(All_cause_time, All_cause_death)~Waiting_time_for_KT+sex+age+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data), data=tx_data, main = "Approach 2: All-cause Death - Hazard Ratios")
+```
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on all-cause death.
+
+### Nonfatal AMI
+
+All covariates except History_of_AMI were significant in univariate analysis.
+
+```{r}
+coxph(Surv(Nonfatal_AMI_time, Nonfatal_AMI)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia+History_of_stroke, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Nonfatal_AMI_time, Nonfatal_AMI)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia+History_of_stroke, data=tx_data), data=tx_data, main = "Approach 2: Nonfatal AMI - Hazard Ratios")
+```
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on nonfatal AMI.
+
+### Nonfatal Stroke
+
+All covariates except sex were significant in univariate analysis.
+
+```{r}
+coxph(Surv(Nonfatal_stroke_time, Nonfatal_stroke)~Waiting_time_for_KT+age+Diabetes+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Nonfatal_stroke_time, Nonfatal_stroke)~Waiting_time_for_KT+age+Diabetes+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data), data=tx_data, main = "Approach 2: Nonfatal Stroke - Hazard Ratios")
+```
+After adjusting for these variables, only a KT waiting time greater than 6 years still has a significant effect on nonfatal stroke.
+
+### Primary endpoint (i.e., Freedom from All-cause Death, Nonfatal AMI, and Nonfatal Stroke)
+
+All covariates were significant in univariate analysis.
+
+```{r}
+coxph(Surv(Primary_events_time, Primary_events)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data)%>%
+  finalfit::fit2df()
+
+ggforest(coxph(Surv(Primary_events_time, Primary_events)~Waiting_time_for_KT+sex+age+Diabetes+Hypertension+Dyslipidemia+History_of_AMI+History_of_stroke, data=tx_data), data=tx_data, main = "Approach 2: Primary Endpoint - Hazard Ratios")
+```
+Even after adjusting for these variables, we see a significant effect for the impact of KT waiting time on the primary endpoint.
+
+CONVERGENCE OF BOTH APPROACHES TO THE SAME RESULT ADDS ROBUSTNESS TO OUR ANALYSIS!!
